@@ -18,11 +18,11 @@ const {
 const { internshipImageMW, resumePdfMW } = require("../middlewares/profile");
 
 // ✅ GET All internships
-router.get("/:studentId", getAllSimpleInternships);
+router.get("/", getAllSimpleInternships);
 router.get("/all", getInternships);
 // 📬 POST
 router.post("/add", internshipImageMW, addInternship);
-router.get("/details/:id", getSingleInternship);
+router.get("/details/:iid/:sid", getSingleInternship);
 // ✅ GET All internships of a specific institue
 router.get(
   "/institute/:instituteId",
