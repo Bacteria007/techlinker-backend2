@@ -20,17 +20,33 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if credentials match hardcoded values
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+    // First, find the admin by email (without active check)
+    let admin = await Admin.findOne({ email: ADMIN_EMAIL });
+    if (!admin) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message: 'Wrong email or password',
         data: null,
       });
     }
 
-    // Check if admin exists in the database
-    let admin = await Admin.findOne({ email: ADMIN_EMAIL });
+    // Check if the account is active (assuming active field is added)
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    // Check if credentials match hardcoded values
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({
+        success: false,
+        message: 'Wrong email or password',
+        data: null,
+      });
+    }
 
     // If admin doesn't exist, create a new admin
     if (!admin) {
@@ -38,6 +54,7 @@ exports.login = async (req, res) => {
         email: ADMIN_EMAIL,
         password: ADMIN_PASSWORD, // Store password as plain text
         role: 'admin',
+        active: true, // Explicitly set active to true on creation
       });
       await admin.save();
     }
@@ -65,10 +82,27 @@ exports.login = async (req, res) => {
 // Get Dashboard Statistics
 exports.getDashboardStats = async (req, res) => {
   try {
-    // Get counts for dashboard cards
-    const studentsCount = await Student.countDocuments();
-    const internshipsCount = await Internship.countDocuments();
-    const institutesCount = await Institute.countDocuments();
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    // Get counts for active entities only
+    const studentsCount = await Student.countDocuments({ active: true });
+    const internshipsCount = await Internship.countDocuments({ active: true });
+    const institutesCount = await Institute.countDocuments({ active: true });
 
     res.status(200).json({
       message: "Dashboard statistics retrieved successfully",
@@ -92,7 +126,24 @@ exports.getDashboardStats = async (req, res) => {
 // Get Recent Students (for dashboard preview)
 exports.getRecentStudents = async (req, res) => {
   try {
-    const recentStudents = await Student.find()
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    const recentStudents = await Student.find({ active: true })
       .sort({ createdAt: -1 })
       .limit(2)
       .select("name email createdAt");
@@ -115,7 +166,24 @@ exports.getRecentStudents = async (req, res) => {
 // Get Active Internships (for dashboard preview)
 exports.getActiveInternships = async (req, res) => {
   try {
-    const activeInternships = await Internship.find()
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    const activeInternships = await Internship.find({ active: true })
       .sort({ createdAt: -1 })
       .limit(2)
       .select(
@@ -140,18 +208,36 @@ exports.getActiveInternships = async (req, res) => {
 
 exports.getPartnerInstitutes = async (req, res) => {
   try {
-    // Fetch partner institutes with limited fields, sorted by creation date
-    const partnerInstitutes = await Institute.find()
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    // Fetch active partner institutes with limited fields, sorted by creation date
+    const partnerInstitutes = await Institute.find({ active: true })
       .sort({ createdAt: -1 })
       .limit(2)
       .select("name address email createdAt")
-      .lean(); // Use lean() for better performance
+      .lean();
 
-    // Fetch internship count for each institute
+    // Fetch internship count for each active institute
     const institutesWithInternshipCount = await Promise.all(
       partnerInstitutes.map(async (institute) => {
         const internshipCount = await Internship.countDocuments({
           instituteId: institute._id,
+          active: true,
         });
 
         return {
@@ -180,21 +266,38 @@ exports.getPartnerInstitutes = async (req, res) => {
 // Get Recent Activity (for dashboard)
 exports.getRecentActivity = async (req, res) => {
   try {
-    // Get recent students
-    const recentStudents = await Student.find()
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    // Get recent active students
+    const recentStudents = await Student.find({ active: true })
       .sort({ createdAt: -1 })
       .limit(3)
       .select("name email bio createdAt");
 
-    // Get recent internships
-    const recentInternships = await Internship.find()
+    // Get recent active internships
+    const recentInternships = await Internship.find({ active: true })
       .sort({ createdAt: -1 })
       .limit(3)
       .select("title type createdAt")
       .populate("instituteId", "name");
 
-    // Get recent institutes
-    const recentInstitutes = await Institute.find()
+    // Get recent active institutes
+    const recentInstitutes = await Institute.find({ active: true })
       .sort({ createdAt: -1 })
       .limit(3)
       .select("name address createdAt");
@@ -250,7 +353,24 @@ exports.getRecentActivity = async (req, res) => {
 
 exports.getAllStudents = async (req, res) => {
   try {
-    const students = await Student.find().lean().exec();
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    const students = await Student.find({ active: true }).lean().exec();
 
     const studentsWithApplications = await Promise.all(
       students.map(async (student) => {
@@ -258,6 +378,7 @@ exports.getAllStudents = async (req, res) => {
           .populate({
             path: "internshipId",
             model: "internships",
+            match: { active: true }, // Only active internships
             populate: {
               path: "instituteId",
               model: "institutes",
@@ -265,9 +386,12 @@ exports.getAllStudents = async (req, res) => {
           })
           .lean();
 
+        // Filter out applications where internshipId is null (due to match)
+        const validApplications = applications.filter(app => app.internshipId);
+
         return {
           ...student,
-          appliedInternships: applications.map((app) => ({
+          appliedInternships: validApplications.map((app) => ({
             internship: app.internshipId,
             appliedAt: app.appliedAt,
           })),
@@ -288,9 +412,27 @@ exports.getAllStudents = async (req, res) => {
     });
   }
 };
+
 exports.getAllinstitutes = async (req, res) => {
   try {
-    const institutes = await Institute.find();
+    // First, find admin to check existence and active status
+    const admin = await Admin.findOne({ email: "admin@gmail.com" });
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        data: null,
+      });
+    }
+    if (!admin.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive, contact admin',
+        data: null,
+      });
+    }
+
+    const institutes = await Institute.find({ active: true });
 
     res.status(200).json({
       success: true,

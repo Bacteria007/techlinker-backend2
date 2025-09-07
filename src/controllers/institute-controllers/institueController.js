@@ -82,6 +82,13 @@ exports.login = async (req, res) => {
       });
     }
 
+    if (!institute.active) {
+      return res.status(400).json({
+        message: "Account Deactivated. Contact Admin!",
+        success: false,
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, institute.password);
     if (!isMatch) {
       return res.status(400).json({
@@ -92,9 +99,18 @@ exports.login = async (req, res) => {
 
     const { password: _, ...instituteData } = institute.toObject(); // remove password
 
-    res.json({
+    res.status(200).json({
       message: "Login successful",
-      data: instituteData,
+      data: {
+        _id: instituteData._id,
+        email: instituteData.email,
+        name: instituteData.name,
+        role: instituteData.role,
+        phone: instituteData.phone,
+        address: instituteData.address,
+        about: instituteData.about,
+        website: instituteData.website,
+      },
       success: true,
     });
   } catch (error) {
@@ -108,9 +124,10 @@ exports.login = async (req, res) => {
 // 📌 Fetch profile
 exports.getProfile = async (req, res) => {
   try {
-    const institute = await Institute.findById(req.params.id).select(
-      "-password"
-    );
+    const institute = await Institute.findOne({
+      _id: req.params.id,
+      active: true,
+    }).select("-password");
     if (!institute) {
       return res.status(404).json({
         message: "Institute not found",
@@ -139,6 +156,7 @@ exports.updateProfile = async (req, res) => {
     const existing = await Institute.findOne({
       email,
       _id: { $ne: instituteId },
+      active:true
     });
     if (existing) {
       return res.status(400).json({
@@ -160,14 +178,24 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       message: "Profile updated successfully",
-      data: updatedInstitute,
+      data: {
+        _id:updatedInstitute._id,
+         email: updatedInstitute.email,
+        name: updatedInstitute.name,
+        role: updatedInstitute.role,
+        phone: updatedInstitute.phone,
+        address: updatedInstitute.address,
+        about: updatedInstitute.about,
+        website: updatedInstitute.website,
+
+      },
       success: true,
     });
   } catch (error) {
     res.status(500).json({
-      message: "Server error",
+      message: "Server error api",
       success: false,
     });
   }
@@ -233,13 +261,11 @@ exports.deleteInstitute = async (req, res) => {
     );
 
     // Soft Delete the institute
-    await Institute.findByIdAndUpdate(
-      instituteId,
-      { $set: { active: false } }
-    );
+    await Institute.findByIdAndUpdate(instituteId, { $set: { active: false } });
 
     res.status(200).json({
-      message: "Institute and its internships deleted successfully (soft delete applied)",
+      message:
+        "Institute and its internships deleted successfully (soft delete applied)",
       success: true,
       data: null,
     });
@@ -252,4 +278,3 @@ exports.deleteInstitute = async (req, res) => {
     });
   }
 };
-

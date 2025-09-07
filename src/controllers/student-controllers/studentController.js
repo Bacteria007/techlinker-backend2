@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
-const Student=require("../../models/students");
+const Student = require("../../models/students");
 const { userType } = require("../../utils/constats");
 const EMAIL_ID = "aqsa.dev1@gmail.com";
 const EMAIL_PASSWORD = "zlor syag wydu szoh";
@@ -18,40 +18,40 @@ const transporter = nodemailer.createTransport({
 
 exports.signup = async (req, res) => {
   try {
-    const { email, password, name,phone } = req.body;
+    const { email, password, name, phone } = req.body;
 
-   
     if (!email || !password) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Email and password are required",
         success: false,
-        data: null
+        data: null,
       });
     }
 
     const emailRegex = /\S+@\S+\.\S+/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Invalid email format",
         success: false,
-        data: null
+        data: null,
       });
     }
 
     if (password.length < 8) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Password must be at least 8 characters",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // Check for existing email (regardless of active status)
     const existingStudent = await Student.findOne({ email });
     if (existingStudent) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         message: "Email already exists",
         success: false,
-        data: null
+        data: null,
       });
     }
 
@@ -61,7 +61,8 @@ exports.signup = async (req, res) => {
       email,
       password: hashedPassword,
       name: name || "",
-      phone:phone
+      phone: phone,
+      active: true, // Explicitly set active to true on creation
     });
 
     await student.save();
@@ -74,47 +75,57 @@ exports.signup = async (req, res) => {
         email: student.email,
         name: student.name,
         role: student.role,
-        phone:student.phone
-      }
+        phone: student.phone,
+      },
     });
   } catch (error) {
     console.error("Signup Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };
-
 
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Email and password are required",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // First, find the student by email (without active check)
     const student = await Student.findOne({ email });
     if (!student) {
-      return res.status(401).json({ 
-        message: "User not found",
+      return res.status(401).json({
+        message: "Wrong email or password",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // Check if the account is active
+    if (!student.active) {
+      return res.status(403).json({
+        message: "Account is inactive, contact admin",
+        success: false,
+        data: null,
+      });
+    }
+
+    // Validate password
     const isValidPassword = await bcrypt.compare(password, student.password);
     if (!isValidPassword) {
-      return res.status(401).json({ 
-        message: "Invalid email or password",
+      return res.status(401).json({
+        message: "Wrong email or password",
         success: false,
-        data: null
+        data: null,
       });
     }
 
@@ -125,15 +136,15 @@ exports.login = async (req, res) => {
         id: student._id,
         email: student.email,
         name: student.name,
-        role:student.role
-      }
+        role: student.role,
+      },
     });
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };
@@ -143,19 +154,29 @@ exports.resetPassword = async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Email is required",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // First, find the student by email (without active check)
     const student = await Student.findOne({ email });
     if (!student) {
-      return res.status(401).json({ 
-        message: "No Account exists with this email",
+      return res.status(401).json({
+        message: "No account exists with this email",
         success: false,
-        data: null
+        data: null,
+      });
+    }
+
+    // Check if the account is active
+    if (!student.active) {
+      return res.status(403).json({
+        message: "Account is inactive, contact admin",
+        success: false,
+        data: null,
       });
     }
 
@@ -183,17 +204,17 @@ exports.resetPassword = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: "OTP sent to your email",
       success: true,
-      data: null
+      data: null,
     });
   } catch (error) {
     console.error("Reset Password Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };
@@ -203,42 +224,44 @@ exports.verifyOtpAndResetPassword = async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
     if (!email || !otp || !newPassword) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Email, OTP, and new password are required",
         success: false,
-        data: null
+        data: null,
       });
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "New password must be at least 8 characters",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // First, find the student by email (without active check in initial query)
     const studentExists = await Student.findOne({ email });
-
     if (!studentExists) {
-      return res.status(401).json({ 
-        message: "No Student found with this email",
+      return res.status(401).json({
+        message: "No account exists with this email",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // Check OTP and active status in a single query
     const student = await Student.findOne({
       email,
       resetPasswordToken: otp,
       resetPasswordExpires: { $gt: Date.now() },
+      active: true,
     });
 
     if (!student) {
-      return res.status(401).json({ 
-        message: "Invalid or expired OTP",
+      return res.status(401).json({
+        message: "Invalid or expired OTP or account is inactive",
         success: false,
-        data: null
+        data: null,
       });
     }
 
@@ -248,17 +271,17 @@ exports.verifyOtpAndResetPassword = async (req, res) => {
     student.resetPasswordExpires = undefined;
     await student.save();
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: "Password reset successfully",
       success: true,
-      data: null
+      data: null,
     });
   } catch (error) {
     console.error("Verify OTP and Reset Password Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };
@@ -270,19 +293,29 @@ exports.getStudentProfile = async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Student ID Missing",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // First, find the student by ID (without active check)
     const student = await Student.findById(id);
     if (!student) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "Student not found",
         success: false,
-        data: null
+        data: null,
+      });
+    }
+
+    // Check if the account is active
+    if (!student.active) {
+      return res.status(403).json({
+        message: "Account is inactive, contact admin",
+        success: false,
+        data: null,
       });
     }
 
@@ -296,15 +329,15 @@ exports.getStudentProfile = async (req, res) => {
         phone: student.phone,
         bio: student.bio,
         resume: student.resume || "",
-        avatar:student.avatar
-      }
+        avatar: student.avatar,
+      },
     });
   } catch (error) {
     console.error("Get Profile Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };
@@ -315,22 +348,31 @@ exports.updateStudentProfile = async (req, res) => {
     const { name, email, phone, bio } = req.body;
 
     if (!id) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Student ID Missing",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // First, find the student by ID (without active check)
     const student = await Student.findById(id);
     if (!student) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "Student not found",
         success: false,
-        data: null
+        data: null,
       });
     }
 
+    // Check if the account is active
+    if (!student.active) {
+      return res.status(403).json({
+        message: "Account is inactive, contact admin",
+        success: false,
+        data: null,
+      });
+    }
 
     // Update text fields
     if (name !== undefined) student.name = name;
@@ -346,10 +388,10 @@ exports.updateStudentProfile = async (req, res) => {
 
     // Email validation
     if (email && !/\S+@\S+\.\S+/.test(email)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Invalid email format",
         success: false,
-        data: null
+        data: null,
       });
     }
 
@@ -365,14 +407,14 @@ exports.updateStudentProfile = async (req, res) => {
         phone: student.phone,
         bio: student.bio,
         resume: student.resume || "",
-      }
+      },
     });
   } catch (error) {
     console.error("Update Profile Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };
@@ -382,20 +424,20 @@ exports.deleteStudent = async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Student ID is missing",
         success: false,
-        data: null
+        data: null,
       });
     }
 
     // Check if the student exists
     const student = await Student.findById(id);
     if (!student) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "Student not found",
         success: false,
-        data: null
+        data: null,
       });
     }
 
@@ -405,14 +447,14 @@ exports.deleteStudent = async (req, res) => {
     res.status(200).json({
       message: "Student deactivated successfully",
       success: true,
-      data: null
+      data: null,
     });
   } catch (error) {
     console.error("Delete Student Error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Internal server error",
       success: false,
-      data: null
+      data: null,
     });
   }
 };

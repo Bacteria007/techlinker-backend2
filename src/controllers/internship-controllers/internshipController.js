@@ -53,6 +53,7 @@ exports.addInternship = async (req, res) => {
       stipend,
       joblevel,
       deadline,
+      active: true, // Explicitly set active to true on creation
     });
 
     await newInternship.save();
@@ -83,11 +84,11 @@ exports.editInternship = async (req, res) => {
     const { id } = req.params; // Internship ID from URL params
     const updates = req.body;
 
-    // Find the internship by ID
-    const internship = await Internship.findById(id);
+    // Find the internship by ID and ensure it's active
+    const internship = await Internship.findOne({ _id: id, active: true });
     if (!internship) {
       return res.status(404).json({
-        message: "Internship not found",
+        message: "Internship not found or inactive",
         success: false,
         data: null,
       });
@@ -103,7 +104,6 @@ exports.editInternship = async (req, res) => {
     if (updates.joblevel) internship.joblevel = updates.joblevel;
     if (updates.deadline) internship.deadline = updates.deadline;
 
-    // Save updated internship
     await internship.save();
 
     res.status(200).json({
@@ -125,11 +125,11 @@ exports.editInternship = async (req, res) => {
 exports.getSingleInternship = async (req, res) => {
   try {
     const { id } = req.params;
-    const internship = await Internship.findOne({ _id: id });
+    const internship = await Internship.findOne({ _id: id, active: true });
 
     if (!internship) {
       return res.status(404).json({
-        message: "Internship not found",
+        message: "Internship not found or inactive",
         success: false,
         data: null,
       });
@@ -152,11 +152,7 @@ exports.getSingleInternship = async (req, res) => {
 // ✅ GET: All internships (with optional limit)
 exports.getAllSimpleInternships = async (req, res) => {
   try {
-    const internships = await Internship.find().populate({
-    path: "instituteId",
-    select: "name", // explicitly include name (and any other needed fields)
-  })
-  .sort({ createdAt: -1 });
+    const internships = await Internship.find({ active: true }).sort({ createdAt: -1 });
 
     res.status(200).json({
       message: "Internships retrieved successfully",
@@ -172,31 +168,23 @@ exports.getAllSimpleInternships = async (req, res) => {
     });
   }
 };
+
 exports.getInternships = async (req, res) => {
   try {
-    const internships = await Internship.find().populate({
-    path: "instituteId",
-    select: "name",
-  })
-  .sort({ createdAt: -1 });
+    const internships = await Internship.find({ active: true }).populate({
+      path: "instituteId",
+      select: "-password",
+    }).sort({ createdAt: -1 });
 
-    // Log raw instituteId values for debugging
     console.log(
       "Raw instituteIds:",
       internships.map((i) => i.instituteId)
     );
 
-    const populatedInternships = await Internship.find()
-      .populate({
-        path: "instituteId",
-        select: "-password",
-      })
-      .sort({ createdAt: -1 });
-
     res.status(200).json({
       message: "Internships retrieved successfully",
       success: true,
-      data: populatedInternships,
+      data: internships,
     });
   } catch (error) {
     console.error("Error fetching internships:", error);
@@ -213,30 +201,24 @@ exports.getInternshipsByInstitute = async (req, res) => {
   try {
     const { instituteId } = req.params;
 
-    // Find internships of this institute and populate applications + student details
-    const internships = await Internship.find({ instituteId })
+    const internships = await Internship.find({ instituteId, active: true })
       .sort({ createdAt: -1 })
-      .lean(); // lean for plain objects
+      .lean();
 
-    // Get all internship IDs
     const internshipIds = internships.map((i) => i._id);
 
-    // Find applications for these internships
     const applications = await Application.find({
       internshipId: { $in: internshipIds },
     })
-      .populate("studentId", "name email phone bio") // only select necessary fields
+      .populate("studentId", "name email phone bio")
       .lean();
 
-    // Merge applications into internships
-    const internshipsWithApplicants = internships.map((internship) => {
-      return {
-        ...internship,
-        applicants: applications.filter(
-          (app) => String(app.internshipId) === String(internship._id)
-        ),
-      };
-    });
+    const internshipsWithApplicants = internships.map((internship) => ({
+      ...internship,
+      applicants: applications.filter(
+        (app) => String(app.internshipId) === String(internship._id)
+      ),
+    }));
 
     res.status(200).json({
       message: "Institute internships with applicants retrieved successfully",
@@ -256,12 +238,12 @@ exports.getInternshipsByInstitute = async (req, res) => {
   }
 };
 
-// 🗑 DELETE: Internship by ID
+// 🗑 DELETE: Internship by ID (soft delete)
 exports.deleteInternship = async (req, res) => {
   try {
-    const internship = await Internship.findByIdAndUpdate(req.params.id,{
-      $set:{active:false}
-    });
+    const internship = await Internship.findByIdAndUpdate(req.params.id, {
+      $set: { active: false },
+    }, { new: true }); // Return the updated document
 
     if (!internship) {
       return res.status(404).json({
@@ -271,7 +253,7 @@ exports.deleteInternship = async (req, res) => {
       });
     }
 
-    const count = await Internship.countDocuments();
+    const count = await Internship.countDocuments({ active: true });
 
     res.status(200).json({
       message: "Internship deleted successfully",
@@ -290,7 +272,7 @@ exports.deleteInternship = async (req, res) => {
 // 🔢 Count internships
 exports.countInternships = async (req, res) => {
   try {
-    const count = await Internship.countDocuments();
+    const count = await Internship.countDocuments({ active: true });
 
     res.status(200).json({
       message: "Internships count retrieved successfully",
@@ -309,7 +291,7 @@ exports.countInternships = async (req, res) => {
 // ✅ Debug route
 exports.checkInternships = async (req, res) => {
   try {
-    const data = await Internship.find();
+    const data = await Internship.find({ active: true });
 
     res.status(200).json({
       message: "Internships data retrieved successfully",
@@ -344,6 +326,7 @@ exports.getActiveMonthInternships = async (req, res) => {
 
     const activeInternships = await Internship.find({
       createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+      active: true,
     }).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -379,6 +362,7 @@ exports.searchInternship = async (req, res) => {
         { location: { $regex: query, $options: "i" } },
         { type: { $regex: query, $options: "i" } },
       ],
+      active: true,
     });
 
     res.status(200).json({
@@ -402,9 +386,7 @@ exports.searchInternship = async (req, res) => {
 exports.applyInternship = async (req, res) => {
   try {
     const { sid, iid } = req.params;
-    console.log(sid, iid);
     if (!sid || !iid) {
-      console.log("Student ID, internship ID required");
       return res.status(400).json({
         message: "Student ID, internship ID required",
         success: false,
@@ -412,7 +394,6 @@ exports.applyInternship = async (req, res) => {
       });
     }
 
-    // Check if student exists
     const student = await Student.findById(sid);
     if (!student) {
       return res.status(404).json({
@@ -422,17 +403,15 @@ exports.applyInternship = async (req, res) => {
       });
     }
 
-    // Check if internship exists
-    const internship = await Internship.findById(iid);
+    const internship = await Internship.findOne({ _id: iid, active: true });
     if (!internship) {
       return res.status(404).json({
-        message: "Internship not found",
+        message: "Internship not found or inactive",
         success: false,
         data: null,
       });
     }
 
-    // Check if student has already applied
     const existingApplication = await Application.findOne({
       studentId: sid,
       internshipId: iid,
@@ -445,18 +424,12 @@ exports.applyInternship = async (req, res) => {
       });
     }
 
-    // Create new application
     const application = new Application({
       studentId: sid,
       internshipId: iid,
-      // resume: resumeFile.path,
     });
 
     await application.save();
-
-    // Normalize resume path to use forward slashes
-    // const resumePath = resumeFile.path.replace(/\\/g, "/");
-
     await student.save();
 
     res.status(201).json({
@@ -466,7 +439,6 @@ exports.applyInternship = async (req, res) => {
         applicationId: application._id,
         studentId: student._id,
         internshipId: internship._id,
-        // resumePath: resumePath,
       },
     });
   } catch (err) {
@@ -488,11 +460,15 @@ exports.getAppliedInternships = async (req, res) => {
       .populate({
         path: "internshipId",
         select: "title instituteId type location deadline",
+        match: { active: true }, // Filter out inactive internships
         populate: { path: "instituteId", select: "name" },
       })
       .select("internshipId appliedAt");
 
-    if (!applications.length) {
+    // Filter out applications where internshipId is null (due to match)
+    const validApplications = applications.filter(app => app.internshipId);
+
+    if (!validApplications.length) {
       return res.status(404).json({
         message: "No internships applied by this student",
         success: false,
@@ -503,7 +479,7 @@ exports.getAppliedInternships = async (req, res) => {
     res.status(200).json({
       message: "Applied internships retrieved successfully",
       success: true,
-      data: applications,
+      data: validApplications,
     });
   } catch (err) {
     console.error("Error fetching applied internships:", err);
@@ -519,6 +495,15 @@ exports.getAppliedInternships = async (req, res) => {
 exports.getInternshipApplicants = async (req, res) => {
   try {
     const { internshipId } = req.params;
+
+    const internship = await Internship.findOne({ _id: internshipId, active: true });
+    if (!internship) {
+      return res.status(404).json({
+        message: "Internship not found or inactive",
+        success: false,
+        data: null,
+      });
+    }
 
     const applications = await Application.find({ internshipId })
       .populate({
@@ -555,23 +540,21 @@ exports.getStudentAppliedInternships = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    // Validate studentId
     if (!studentId) {
       return res.status(400).json({ error: "Student ID is required" });
     }
 
-    // Check if student exists
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ error: "Student not found" });
     }
 
-    // Find all applications for the student and populate internship details
     const applications = await Application.find({ studentId })
       .populate({
         path: "internshipId",
         select:
           "title instituteId type location deadline image description stipend joblevel education",
+        match: { active: true }, // Filter out inactive internships
         populate: {
           path: "instituteId",
           select: "name",
@@ -580,17 +563,18 @@ exports.getStudentAppliedInternships = async (req, res) => {
       .select("internshipId appliedAt resume")
       .sort({ appliedAt: -1 });
 
-    if (!applications.length) {
+    const validApplications = applications.filter(app => app.internshipId);
+
+    if (!validApplications.length) {
       return res
         .status(404)
         .json({ message: "No internships applied by this student" });
     }
 
-    // Format response to include only necessary internship details
-    const appliedInternships = applications.map((app) => ({
+    const appliedInternships = validApplications.map((app) => ({
       internshipId: app.internshipId._id,
       title: app.internshipId.title,
-      institute: app.internshipId.id.name,
+      institute: app.internshipId.instituteId.name,
       type: app.internshipId.type,
       location: app.internshipId.location,
       deadline: app.internshipId.deadline,
@@ -605,7 +589,7 @@ exports.getStudentAppliedInternships = async (req, res) => {
 
     res.status(200).json({
       message: "Applied internships retrieved successfully",
-      count: applications.length,
+      count: appliedInternships.length,
       internships: appliedInternships,
     });
   } catch (err) {
