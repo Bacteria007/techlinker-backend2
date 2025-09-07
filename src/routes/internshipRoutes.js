@@ -30,7 +30,7 @@ router.get(
 );
 router.get("/search", searchInternship);
 router.post("/apply/:sid/:iid", applyInternship);
-router.get("/institute/:internshipId/applicants", getInternshipApplicants);
+router.get("/institute/:instituteId/applicants", getInternshipApplicants);
 router.get("/student/:studentId/applied-internships", getStudentAppliedInternships);
 
 //Edit
