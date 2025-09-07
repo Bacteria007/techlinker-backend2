@@ -18,7 +18,7 @@ const {
 const { internshipImageMW, resumePdfMW } = require("../middlewares/profile");
 
 // ✅ GET All internships
-router.get("/", getAllSimpleInternships);
+router.get("/:studentId", getAllSimpleInternships);
 router.get("/all", getInternships);
 // 📬 POST
 router.post("/add", internshipImageMW, addInternship);

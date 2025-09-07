@@ -125,7 +125,10 @@ exports.editInternship = async (req, res) => {
 exports.getSingleInternship = async (req, res) => {
   try {
     const { id } = req.params;
-    const internship = await Internship.findOne({ _id: id, active: true });
+    const internship = await Internship.findOne({ _id: id, active: true }).populate({
+      path: "instituteId",
+      select: "-password",
+    });
 
     if (!internship) {
       return res.status(404).json({
@@ -152,12 +155,28 @@ exports.getSingleInternship = async (req, res) => {
 // ✅ GET: All internships (with optional limit)
 exports.getAllSimpleInternships = async (req, res) => {
   try {
+    const { studentId } = req.params; // Pass student ID as query param
+
+    // Fetch all active internships
     const internships = await Internship.find({ active: true }).sort({ createdAt: -1 });
+
+    let internshipData = internships;
+
+    // If studentId is provided, check applications
+    if (studentId) {
+      const applications = await Application.find({ studentId }).select("internshipId");
+      const appliedIds = applications.map(app => app.internshipId.toString());
+
+      internshipData = internships.map(internship => ({
+        ...internship.toObject(),
+        applied: appliedIds.includes(internship._id.toString()),
+      }));
+    }
 
     res.status(200).json({
       message: "Internships retrieved successfully",
       success: true,
-      data: internships,
+      data: internshipData,
     });
   } catch (error) {
     console.error("Error fetching internships:", error);
