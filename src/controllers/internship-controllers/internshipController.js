@@ -528,7 +528,7 @@ exports.getInternshipApplicants = async (req, res) => {
     const { instituteId } = req.params;
 
     // Fetch all internships for the given institute
-    const internships = await Internship.find({ instituteId: instituteId })
+    const internships = await Internship.find({ instituteId })
       .populate({
         path: "instituteId",
         select: "name email",
