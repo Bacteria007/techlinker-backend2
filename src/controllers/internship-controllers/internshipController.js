@@ -521,8 +521,6 @@ exports.getAppliedInternships = async (req, res) => {
 
 // Get all students who applied for a specific internship
 
-// Route definition
-
 exports.getInternshipApplicants = async (req, res) => {
   try {
     const { instituteId } = req.params;

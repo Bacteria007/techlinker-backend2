@@ -143,7 +143,7 @@ exports.getRecentStudents = async (req, res) => {
       });
     }
 
-    const recentStudents = await Student.find({ active: true })
+    const recentStudents = await Student.find()
       .sort({ createdAt: -1 })
       .limit(2)
       .select("name email createdAt");

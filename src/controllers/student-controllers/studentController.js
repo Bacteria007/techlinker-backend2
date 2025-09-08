@@ -419,7 +419,8 @@ exports.updateStudentProfile = async (req, res) => {
   }
 };
 
-exports.deleteStudent = async (req, res) => {
+
+exports.updateStudentStatus = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -441,16 +442,17 @@ exports.deleteStudent = async (req, res) => {
       });
     }
 
-    // Soft delete by setting active to false
-    await Student.findByIdAndUpdate(id, { $set: { active: false } });
+    // Toggle the active status
+    const newActiveStatus = !student.active;
+    await Student.findByIdAndUpdate(id, { $set: { active: newActiveStatus } });
 
     res.status(200).json({
-      message: "Student deactivated successfully",
+      message: `Student ${newActiveStatus ? 'activated' : 'deactivated'} successfully`,
       success: true,
-      data: null,
+      data: { active: newActiveStatus }, // Return the new status for frontend
     });
   } catch (error) {
-    console.error("Delete Student Error:", error);
+    console.error("Update Student Status Error:", error);
     res.status(500).json({
       message: "Internal server error",
       success: false,
